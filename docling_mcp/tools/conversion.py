@@ -1,5 +1,7 @@
 import gc
+import os
 from typing import Annotated, Any
+from dotenv import load_dotenv
 
 from mcp.shared.exceptions import McpError
 from mcp.types import INTERNAL_ERROR, ErrorData
@@ -15,6 +17,10 @@ from docling_core.types.doc import DoclingDocument
 from docling_mcp.docling_cache import get_cache_dir, get_cache_key
 from docling_mcp.logger import setup_logger
 from docling_mcp.shared import local_document_cache, mcp
+
+from elasticsearch import Elasticsearch
+
+load_dotenv()
 
 # Create a default project logger
 logger = setup_logger()
@@ -136,6 +142,26 @@ def convert_pdf_document_into_json_docling_document_from_uri_path(
         raise McpError(
             ErrorData(code=INTERNAL_ERROR, message=f"Unexpected error: {e!s}")
         )
+
+
+@mcp.tool()
+def docling_document_to_elastic_search(
+        document_key: str
+) -> [bool, str]:
+    """
+    Upload a docling document to elastic search server.
+
+    Args:
+        document_key:
+
+    Returns:
+        The tool returns a tuple, the first element being a boolean
+        representing success and the second is the unique identifier for
+        the documents existence in elastic search.
+
+    """
+    client = Elasticsearch(os.getenv("ELASTIC_SEARCH_URL"), api_key=os.getenv("ELASTIC_SEARCH_API_KEY"))
+    pass
 
 
 @mcp.tool()
