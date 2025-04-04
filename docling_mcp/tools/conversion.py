@@ -13,7 +13,7 @@ from docling.datamodel.pipeline_options import (
 from docling.document_converter import DocumentConverter, FormatOption, PdfFormatOption
 from docling.utils.accelerator_utils import AcceleratorDevice
 from docling_core.types.doc.document import (
-    ContentLayer,
+    ContentLayer, DoclingDocument
 )
 from docling_core.types.doc.labels import (
     DocItemLabel,
@@ -24,6 +24,7 @@ from docling_mcp.logger import setup_logger
 from docling_mcp.shared import local_document_cache, local_stack_cache, mcp
 
 from elasticsearch import Elasticsearch
+from elastic_transport import ObjectApiResponse
 
 load_dotenv()
 
@@ -54,7 +55,7 @@ def is_document_in_local_cache(cache_key: str) -> bool:
 
 @mcp.tool()
 def convert_pdf_document_into_json_docling_document_from_uri_path(
-    source: str,
+        source: str,
 ) -> tuple[bool, str]:
     """
     Convert a PDF document from a URL or local path and store in local cache.
@@ -180,26 +181,26 @@ def docling_document_to_elastic_search(
     if not client.ping():
         raise McpError(ErrorData(code=INTERNAL_ERROR, message="Failed to connect to Elasticsearch"))
 
+    # Access the pre-existing file from memory
+    document: DoclingDocument = local_document_cache[document_key]
 
-    cache_dir = get_cache_dir()
+    result_dict = document.export_to_dict()
+    # Binary hash int value cannot be parsed by elastic as it exceeds the 'long' data type. Convert to string to circumvent.
+    result_dict["origin"]["binary_hash"] = str(result_dict["origin"]["binary_hash"])
 
-    document = local_document_cache[document_key]
+    # Add the document to elastic search
+    elastic_response: ObjectApiResponse = client.index(index="docling-mcp", id=document_key, document=result_dict)
 
-    doc = {
-        'author': 'author_name',
-        'text': 'Interesting content...',
-        'timestamp': "datetime.now()",
-    }
+    # Check to see if this addition was not a success
+    if elastic_response.meta.status not in [200, 201]:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="File not added to Elastic search"))
 
-
-    pass
-
-
+    return True, document_key
 
 
 @mcp.tool()
 def convert_attachments_into_docling_document(
-    pdf_payloads: list[Annotated[bytes, {"media_type": "application/octet-stream"}]],
+        pdf_payloads: list[Annotated[bytes, {"media_type": "application/octet-stream"}]],
 ) -> list[dict[str, Any]]:
     """
     Process a pdf files attachment from Claude Desktop.
