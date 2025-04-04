@@ -71,6 +71,24 @@ During the writing process, you can check what has been written already by calli
 The document should investigate the impact of tokenizers on the quality of LLM's.
 ```
 
+## Using Elastic as a document store
+
+Currently for development purposes.
+
+Run the following docker command:
+
+```sh
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e discovery.type=single-node \
+  -e xpack.security.enabled=false \
+  -e ELASTIC_PASSWORD=helloworld \
+  -e ES_JAVA_OPTS="-Xmx2g -Xms2g" \
+  elasticsearch:8.16.6
+```
+
+
 ## License
 
 The Docling-MCP codebase is under MIT license. For individual model usage, please refer to the model licenses found in the original packages.
