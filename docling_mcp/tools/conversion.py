@@ -160,8 +160,34 @@ def docling_document_to_elastic_search(
         the documents existence in elastic search.
 
     """
+    # Check if the document key in the local cache.
+    if document_key not in local_document_cache:
+        doc_keys = ", ".join(local_document_cache.keys())
+        raise ValueError(
+            f"document-key: {document_key} is not found. Existing document-keys are: {doc_keys}"
+        )
+    # Load the elastic search client.
     client = Elasticsearch(os.getenv("ELASTIC_SEARCH_URL"), api_key=os.getenv("ELASTIC_SEARCH_API_KEY"))
+
+    # Check that there is a successful connection.
+    if not client.ping():
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Failed to connect to Elasticsearch"))
+
+
+    cache_dir = get_cache_dir()
+
+    document = local_document_cache[document_key]
+
+    doc = {
+        'author': 'author_name',
+        'text': 'Interesting content...',
+        'timestamp': "datetime.now()",
+    }
+
+
     pass
+
+
 
 
 @mcp.tool()
