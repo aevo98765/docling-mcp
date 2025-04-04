@@ -151,51 +151,51 @@ def convert_pdf_document_into_json_docling_document_from_uri_path(
             ErrorData(code=INTERNAL_ERROR, message=f"Unexpected error: {e!s}")
         )
 
+if os.getenv("ELASTIC_SEARCH_URL") and os.getenv("ELASTIC_SEARCH_API_KEY"):
+    @mcp.tool()
+    def docling_document_to_elastic_search(
+            document_key: str
+    ) -> [bool, str]:
+        """
+        Upload a docling document to elastic search server.
 
-@mcp.tool()
-def docling_document_to_elastic_search(
-        document_key: str
-) -> [bool, str]:
-    """
-    Upload a docling document to elastic search server.
+        Args:
+            document_key:
 
-    Args:
-        document_key:
+        Returns:
+            The tool returns a tuple, the first element being a boolean
+            representing success and the second is the unique identifier for
+            the documents existence in elastic search.
 
-    Returns:
-        The tool returns a tuple, the first element being a boolean
-        representing success and the second is the unique identifier for
-        the documents existence in elastic search.
+        """
+        # Check if the document key in the local cache.
+        if document_key not in local_document_cache:
+            doc_keys = ", ".join(local_document_cache.keys())
+            raise ValueError(
+                f"document-key: {document_key} is not found. Existing document-keys are: {doc_keys}"
+            )
+        # Load the elastic search client.
+        client = Elasticsearch(os.getenv("ELASTIC_SEARCH_URL"), api_key=os.getenv("ELASTIC_SEARCH_API_KEY"))
 
-    """
-    # Check if the document key in the local cache.
-    if document_key not in local_document_cache:
-        doc_keys = ", ".join(local_document_cache.keys())
-        raise ValueError(
-            f"document-key: {document_key} is not found. Existing document-keys are: {doc_keys}"
-        )
-    # Load the elastic search client.
-    client = Elasticsearch(os.getenv("ELASTIC_SEARCH_URL"), api_key=os.getenv("ELASTIC_SEARCH_API_KEY"))
+        # Check that there is a successful connection.
+        if not client.ping():
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message="Failed to connect to Elasticsearch"))
 
-    # Check that there is a successful connection.
-    if not client.ping():
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Failed to connect to Elasticsearch"))
+        # Access the pre-existing file from memory
+        document: DoclingDocument = local_document_cache[document_key]
 
-    # Access the pre-existing file from memory
-    document: DoclingDocument = local_document_cache[document_key]
+        result_dict = document.export_to_dict()
+        # Binary hash int value cannot be parsed by elastic as it exceeds the 'long' data type. Convert to string to circumvent.
+        result_dict["origin"]["binary_hash"] = str(result_dict["origin"]["binary_hash"])
 
-    result_dict = document.export_to_dict()
-    # Binary hash int value cannot be parsed by elastic as it exceeds the 'long' data type. Convert to string to circumvent.
-    result_dict["origin"]["binary_hash"] = str(result_dict["origin"]["binary_hash"])
+        # Add the document to elastic search
+        elastic_response: ObjectApiResponse = client.index(index="docling-mcp", id=document_key, document=result_dict)
 
-    # Add the document to elastic search
-    elastic_response: ObjectApiResponse = client.index(index="docling-mcp", id=document_key, document=result_dict)
+        # Check to see if this addition was not a success
+        if elastic_response.meta.status not in [200, 201]:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message="File not added to Elastic search"))
 
-    # Check to see if this addition was not a success
-    if elastic_response.meta.status not in [200, 201]:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="File not added to Elastic search"))
-
-    return True, document_key
+        return True, document_key
 
 
 @mcp.tool()
